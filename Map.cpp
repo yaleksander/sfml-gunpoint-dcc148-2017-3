@@ -127,6 +127,7 @@ Map::Map(string map_name)
 			infile >> area.right;
 			infile >> area.top;
 			infile >> area.bottom;
+			infile >> area.pass;
 			for (j = 0; j < area_n; j++)
 				area.intersect.push_back(false);
 			infile >> j;
@@ -214,9 +215,6 @@ Map::Map(string map_name)
 		}
 	}
 
-	// Retorna o pixel verde
-	img.setPixel(this->starting_pos_x, this->starting_pos_y, sf::Color::Green);
-
 	// Encontra e apaga areas duplicadas
 	for (int i = 0; i < this->areas.size(); i++)
 	{
@@ -229,6 +227,31 @@ Map::Map(string map_name)
 			b = (this->areas[i].bottom == this->areas[j].bottom);
 			if (l && r && t && b)
 				this->areas.erase(this->areas.begin() + j--);
+		}
+	}
+
+	// Encontra areas delimitadas por portas
+	for (int i = 0; i < w; i++)
+	{
+		bool a, b, c, d;
+		for (int j = 0; j < h; j++)
+		{
+			a = (img.getPixel(i,     j    ) == sf::Color::Black);
+			b = (img.getPixel(i + 1, j    ) == sf::Color::Black);
+			c = (img.getPixel(i,     j + 1) == sf::Color::Red);
+			d = (img.getPixel(i + 1, j + 1) == sf::Color::White);
+			if (a && b && c && d)
+			{
+				int k;
+				while (img.getPixel(i - k, j + 1) == sf::Color::Red)
+					k++;
+				Area a1 = findArea(img, i - k, j + 1, 'd');
+				Area a2 = findArea(img, i + 1, j + 1, 'd');
+				a1.right = a2.right;
+				a1.top = j;
+				a1.pass = false;
+				this->areas.push_back(a1);
+			}
 		}
 	}
 
@@ -284,6 +307,7 @@ Map::Map(string map_name)
 		outfile << this->areas[i].right << " ";
 		outfile << this->areas[i].top << " ";
 		outfile << this->areas[i].bottom << " ";
+		outfile << this->areas[i].pass << " ";
 		for (int j = 0; j < this->areas.size(); j++)
 			if (this->areas[i].intersect[j])
 				outfile << j << " ";
@@ -335,7 +359,7 @@ int Map::getStartingPosY(void)
 bool Map::passable(int x, int y)
 {
 	for (int i = 0; i < this->areas.size(); i++)
-		if (this->pos_a[i])
+		if (this->pos_a[i] && this->areas[i].pass)
 			if (x >= this->areas[i].left)
 				if (x <= this->areas[i].right)
 					if (y >= this->areas[i].top)
@@ -360,10 +384,13 @@ void Map::updatePosA(int x, int y)
 				}
 			}
 			if (b)
+				break;
+/*
 			{
 				i = 0;
-				break;
+				continue;
 			}
+*/
 		}
 	}
 	for (int i = 0; i < this->areas.size(); i++)

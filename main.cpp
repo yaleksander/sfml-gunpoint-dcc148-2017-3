@@ -10,7 +10,7 @@ using namespace std;
 
 // Informacoes basicas
 string settings     = "settings.txt";
-string map_name     = "map3.png";
+string map_name     = "map4.png";
 string window_title = "Gunpoint Prototype";
 string font_path    = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf";
 
