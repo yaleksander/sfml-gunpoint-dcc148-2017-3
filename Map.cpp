@@ -417,6 +417,17 @@ Step Map::step(int mx, int my, int nx, int ny)
 	{
 		if (!this->pos_a[i])
 			continue;
+		step.d = 'e';
+		if (mx == this->areas[i].left + 1 && nx <= 0)
+			step.d = 'l';
+		else if (mx == this->areas[i].right - 1 && nx >= 0)
+			step.d = 'r';
+		else if (my == this->areas[i].top + 1 && ny <= 0)
+			step.d = 'u';
+		else if (my == this->areas[i].bottom - 1 && ny >= 0)
+			step.d = 'd';
+		if (step.d != 'e')
+			break;
 		step.x = -1;
 		step.y = -1;
 		if (this->areas[i].left > mx + nx)
@@ -462,7 +473,8 @@ Step Map::step(int mx, int my, int nx, int ny)
 			return step;
 		}
 	}
-	step.d = 'e';
+	step.x = mx;
+	step.y = my;
 	return step;
 }
 

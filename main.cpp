@@ -64,7 +64,7 @@ int ji = 5;      	// valor somado a jump_strength em cada iteracao
 float k0 = 0.7;  	// constante multiplicadora de jump_strength
 float k1 = 90.0; 	// aceleracao gravitacional do jogo
 float k2 = 50.0; 	// modulo do vetor direcao
-float k3 = 25.0; 	// magica. Manter valor entre 10 e 20
+float k3 = 19.0; 	// magica. Manter valor entre 10 e 20
 
 // Contador (pra nao precisar inicializar o mesmo contador varias vezes)
 int i;
