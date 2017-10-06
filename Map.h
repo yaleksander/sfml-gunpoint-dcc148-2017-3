@@ -3,26 +3,11 @@
 
 #include <string>
 #include <vector>
+#include "Door.h"
 
 using namespace std;
 
-typedef struct Area Area;
 typedef struct Step Step;
-
-struct Area
-{
-	// limites
-	int left;
-	int right;
-	int top;
-	int bottom;
-
-	// passabilidade
-	bool pass;
-
-	// intersecoes
-	vector<bool> intersect;
-};
 
 struct Step
 {
@@ -36,6 +21,7 @@ class Map
 	private:
 
 		vector<Area> areas;
+		vector<Door> doors;
 		vector<bool> pos_a;
 		int starting_pos_x;
 		int starting_pos_y;
@@ -53,6 +39,7 @@ class Map
 		bool passable(int x, int y);
 		void updatePosA(int x, int y);
 		Step step(int mx, int my, int nx, int ny);
+		bool bumpAll(int x, int y);
 };
 
 #endif

@@ -71,8 +71,6 @@ int i;
 
 int main(void)
 {
-	player_d = 'n';
-
 	window_width = 800;
 	window_height = 600;
 
@@ -98,6 +96,9 @@ int main(void)
 	player_map_y = player_start_y;
 	player_screen_x = player_map_x * zoom + adjust_x;
 	player_screen_y = player_map_y * zoom + adjust_y;
+	vx = 0;
+	vy = 0;
+	player_d = 'n';
 
 	sf::RectangleShape player;
 	player.setPosition(player_screen_x - player_size_x, player_screen_y - player_size_y);
@@ -170,6 +171,7 @@ int main(void)
 			at = 0;
 
 		// Controle de movimento
+		char player_old_d = player_d;
 		if (player_d == 'n')
 		{
 			// Caso o personagem esteja no ar, prossegue com o movimento em parabola
@@ -397,6 +399,21 @@ int main(void)
 					}
 				}
 			}
+		}
+		if (player_old_d != player_d && player_d != 'd' && level_map.bumpAll(player_map_x, player_map_y))
+		{
+			vx = 0;
+			vy = 0;
+			at = 0;
+			if (player_d == 'l')
+				player_map_x++;
+			else if (player_d == 'r')
+				player_map_x--;
+			if (player_d == 'u')
+				player_map_y++;
+			player_start_x = player_map_x;
+			player_start_y = player_map_y;
+			player_d = 'n';
 		}
 
 		// Atualiza a coordenada do personagem na tela e o viewport

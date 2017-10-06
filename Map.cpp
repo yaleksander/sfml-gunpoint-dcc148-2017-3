@@ -118,7 +118,7 @@ Map::Map(string map_name)
 	ifstream infile((map_name + ".md").c_str());
 	if (infile.is_open())
 	{
-		int area_n, j;
+		int area_n, door_n, j;
 		infile >> area_n;
 		for (int i = 0; i < area_n; i++)
 		{
@@ -127,7 +127,6 @@ Map::Map(string map_name)
 			infile >> area.right;
 			infile >> area.top;
 			infile >> area.bottom;
-			infile >> area.pass;
 			for (j = 0; j < area_n; j++)
 				area.intersect.push_back(false);
 			infile >> j;
@@ -144,6 +143,18 @@ Map::Map(string map_name)
 		{
 			infile >> j;
 			this->pos_a.push_back(j);
+		}
+		infile >> door_n;
+		for (int i = 0; i < door_n; i++)
+		{
+			Area area;
+			infile >> j;
+			infile >> area.left;
+			infile >> area.right;
+			infile >> area.top;
+			infile >> area.bottom;
+			Door door(j, area);
+			this->doors.push_back(door);
 		}
 		return;
 	}
@@ -242,7 +253,7 @@ Map::Map(string map_name)
 			d = (img.getPixel(i + 1, j + 1) == sf::Color::White);
 			if (a && b && c && d)
 			{
-				int k;
+				int k = 0;
 				while (img.getPixel(i - k, j + 1) == sf::Color::Red)
 					k++;
 				Area a1 = findArea(img, i - k, j + 1, 'd');
@@ -251,6 +262,16 @@ Map::Map(string map_name)
 				a1.top = j;
 				a1.pass = false;
 				this->areas.push_back(a1);
+				k = 0;
+				while (img.getPixel(i - k, j) == sf::Color::Black)
+					k++;
+				a1.left = i - k;
+				k = 0;
+				while (img.getPixel(i + k, j) == sf::Color::Black)
+					k++;
+				a1.right = i + k;
+				Door door(this->areas.size() - 1, a1);
+				this->doors.push_back(door);
 			}
 		}
 	}
@@ -290,8 +311,6 @@ Map::Map(string map_name)
 		b = (this->starting_pos_x < this->areas[i].right);
 		c = (this->starting_pos_y > this->areas[i].top);
 		d = (this->starting_pos_y < this->areas[i].bottom);
-		cout << this->areas[i].left << "~" << this->starting_pos_x << "~" << this->areas[i].right << endl;
-		cout << this->areas[i].top << "~" << this->starting_pos_y << "~" << this->areas[i].bottom << endl << endl;
 		if (a && b && c && d)
 			this->pos_a.push_back(true);
 		else
@@ -307,7 +326,6 @@ Map::Map(string map_name)
 		outfile << this->areas[i].right << " ";
 		outfile << this->areas[i].top << " ";
 		outfile << this->areas[i].bottom << " ";
-		outfile << this->areas[i].pass << " ";
 		for (int j = 0; j < this->areas.size(); j++)
 			if (this->areas[i].intersect[j])
 				outfile << j << " ";
@@ -317,7 +335,16 @@ Map::Map(string map_name)
 	outfile << this->starting_pos_y << endl;
 	for (int i = 0; i < this->areas.size(); i++)
 		outfile << this->pos_a[i] << " ";
-	outfile << endl;
+	outfile << endl << this->doors.size() << endl;
+	for (int i = 0; i < this->doors.size(); i++)
+	{
+		Area area = this->doors[i].getClosedArea();
+		outfile << this->doors[i].getArea() << " ";
+		outfile << area.left << " ";
+		outfile << area.right << " ";
+		outfile << area.top << " ";
+		outfile << area.bottom << " ";
+	}
 }
 
 Area Map::getArea(int n)
@@ -359,12 +386,20 @@ int Map::getStartingPosY(void)
 bool Map::passable(int x, int y)
 {
 	for (int i = 0; i < this->areas.size(); i++)
-		if (this->pos_a[i] && this->areas[i].pass)
+	{
+		if (this->pos_a[i])
+		{
+			for (int j = 0; j < this->doors.size(); j++)
+				if (this->doors[j].getArea() == i)
+					if (!this->doors[j].isOpen())
+						return false;
 			if (x >= this->areas[i].left)
 				if (x <= this->areas[i].right)
 					if (y >= this->areas[i].top)
 						if (y <= this->areas[i].bottom)
 							return true;
+		}
+	}
 	return false;
 }
 
@@ -417,6 +452,12 @@ Step Map::step(int mx, int my, int nx, int ny)
 	{
 		if (!this->pos_a[i])
 			continue;
+		int j;
+		for (j = 0; j < this->doors.size(); j++)
+			if (this->doors[j].getArea() == i && !this->doors[j].isOpen())
+				break;
+		if (j < this->doors.size())
+			continue;
 		step.d = 'e';
 		if (mx == this->areas[i].left + 1 && nx <= 0)
 			step.d = 'l';
@@ -427,7 +468,7 @@ Step Map::step(int mx, int my, int nx, int ny)
 		else if (my == this->areas[i].bottom - 1 && ny >= 0)
 			step.d = 'd';
 		if (step.d != 'e')
-			break;
+			continue;
 		step.x = -1;
 		step.y = -1;
 		if (this->areas[i].left > mx + nx)
@@ -476,5 +517,13 @@ Step Map::step(int mx, int my, int nx, int ny)
 	step.x = mx;
 	step.y = my;
 	return step;
+}
+
+bool Map::bumpAll(int x, int y)
+{
+	for (int i = 0; i < this->doors.size(); i++)
+		if (this->doors[i].bump(x, y))
+			return true;
+	return false;
 }
 
