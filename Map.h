@@ -3,7 +3,9 @@
 
 #include <string>
 #include <vector>
+#include "Area.h"
 #include "Door.h"
+#include "Glass.h"
 
 using namespace std;
 
@@ -20,11 +22,12 @@ class Map
 {
 	private:
 
-		vector<Area> areas;
-		vector<Door> doors;
-		vector<bool> pos_a;
 		int starting_pos_x;
 		int starting_pos_y;
+		vector<bool> pos_a;
+		vector<Area> areas;
+		vector<Door> doors;
+		vector<Glass> glass;
 
 	public:
 
@@ -40,6 +43,8 @@ class Map
 		void updatePosA(int x, int y);
 		Step step(int mx, int my, int nx, int ny);
 		bool bumpAll(int x, int y);
+		bool bumpGlass(int xa, int ya, int xb, int yb);
+		vector<bool> getPossibleAreas(int x, int y, int n);
 };
 
 #endif

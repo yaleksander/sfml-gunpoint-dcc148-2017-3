@@ -253,7 +253,7 @@ int main(void)
 							player_map_y = area.bottom - 1;
 							player_d = 'd';
 						}
-						else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
+						else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S) && trigger_manager)
 						{
 							player_map_y = area.top + 1;
 							player_d = 'u';
@@ -487,6 +487,9 @@ int main(void)
 				r.setSize(sf::Vector2f(5, 5));
 				r.setFillColor(sf::Color::Red);
 				vector<bool> old_pos_a = level_map.getPosA();
+				xt = player_map_x;
+				yt = player_map_y;
+				int xt_prev, yt_prev;
 				while (true)
 				{
 					// Impede divisao por 0
@@ -495,18 +498,22 @@ int main(void)
 
 					for (i = 0; i < itr; i++)
 					{
+						t += ati;
+
+						// Guarda a posicao do ultimo ponto da parabola
+						xt_prev = xt;
+						yt_prev = yt;
+
 						// Calcula a posicao do proximo ponto da parabola
 						xt = player_map_x + jump_strength * k0 * t * x / h;
 						yt = player_map_y + jump_strength * k0 * t * y / h + k1 * t * t;
 
 						// Para de desenhar caso o trajeto seja impossivel
-						if (!level_map.passable(xt, yt))
+						if (!level_map.passable(xt, yt) && !level_map.bumpGlass(xt_prev, yt_prev, xt, yt))
 							break;
 
 						// Atualiza a posicao para continuar o calculo do trajeto
 						level_map.updatePosA(xt, yt);
-
-						t += ati;
 					}
 					if (i < itr)
 						break;

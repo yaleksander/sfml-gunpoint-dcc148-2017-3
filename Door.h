@@ -1,26 +1,7 @@
 #ifndef DOOR_H
 #define DOOR_H
 
-#include <vector>
-
-using namespace std;
-
-typedef struct Area Area;
-
-struct Area
-{
-	// limites
-	int left;
-	int right;
-	int top;
-	int bottom;
-
-	// passabilidade
-	bool pass;
-
-	// intersecoes
-	vector<bool> intersect;
-};
+#include "Area.h"
 
 class Door
 {
@@ -41,3 +22,4 @@ class Door
 };
 
 #endif
+

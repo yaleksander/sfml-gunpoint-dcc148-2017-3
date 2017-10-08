@@ -52,7 +52,6 @@ Area findArea(sf::Image img, int x, int y, char direction)
 	w = size.x;
 	h = size.y;
 	Area area;
-	area.pass = true;
 	switch (direction)
 	{
 		case 'l':
@@ -118,7 +117,7 @@ Map::Map(string map_name)
 	ifstream infile((map_name + ".md").c_str());
 	if (infile.is_open())
 	{
-		int area_n, door_n, j;
+		int area_n, door_n, glass_n, j;
 		infile >> area_n;
 		for (int i = 0; i < area_n; i++)
 		{
@@ -155,6 +154,16 @@ Map::Map(string map_name)
 			infile >> area.bottom;
 			Door door(j, area);
 			this->doors.push_back(door);
+		}
+		infile >> glass_n;
+		for (int i = 0; i < glass_n; i++)
+		{
+			int n, a, b;
+			infile >> n;
+			infile >> a;
+			infile >> b;
+			Glass glass(n, a, b);
+			this->glass.push_back(glass);
 		}
 		return;
 	}
@@ -260,7 +269,6 @@ Map::Map(string map_name)
 				Area a2 = findArea(img, i + 1, j + 1, 'd');
 				a1.right = a2.right;
 				a1.top = j;
-				a1.pass = false;
 				this->areas.push_back(a1);
 				k = 0;
 				while (img.getPixel(i - k, j) == sf::Color::Black)
@@ -272,6 +280,64 @@ Map::Map(string map_name)
 				a1.right = i + k;
 				Door door(this->areas.size() - 1, a1);
 				this->doors.push_back(door);
+			}
+		}
+	}
+
+	// Encontra areas delimitadas por janelas
+	int area_n = this->areas.size();
+	for (int i = 0; i < w; i++)
+	{
+		bool a, c, d;
+		for (int j = 0; j < h; j++)
+		{
+			a = (img.getPixel(i,     j    ) == sf::Color::Black);
+			c = (img.getPixel(i,     j + 1) == sf::Color::Blue);
+			d = (img.getPixel(i + 1, j + 1) == sf::Color::White);
+			if (a && c && d)
+			{
+				int left = 0;
+				int right = w;
+				int k = 0;
+				while (img.getPixel(i - k, j + 1) == sf::Color::Blue)
+					k++;
+				vector<bool> b_left;
+				vector<bool> b_right;
+				for (int l = 0; l < area_n; l++)
+				{
+					b_left.push_back(true);
+					b_right.push_back(true);
+				}
+				int l;
+				for (l = 1; img.getPixel(i, j + l) == sf::Color::Blue; l++)
+				{
+					left = max(left, searchForBoundary(img, i - k, j + l, 'l'));
+					right = min(right, searchForBoundary(img, i + 1, j + l, 'r'));
+					vector<bool> compare_left = this->getPossibleAreas(i - k, j + l, area_n);
+					vector<bool> compare_right = this->getPossibleAreas(i + 1, j + l, area_n);
+					for (int m = 0; m < area_n; m++)
+					{
+						if (!compare_left[m])
+							b_left[m] = false;
+						if (!compare_right[m])
+							b_right[m] = false;
+					}
+				}
+				Area area;
+				area.left = left;
+				area.right = right;
+				area.top = j;
+				area.bottom = j + l;
+				this->areas.push_back(area);
+				for (l = 0; l < area_n; l++)
+				{
+					if (b_left[l])
+						left = l;
+					if (b_right[l])
+						right = l;
+				}
+				Glass glass(this->areas.size() - 1, left, right);
+				this->glass.push_back(glass);
 			}
 		}
 	}
@@ -343,7 +409,14 @@ Map::Map(string map_name)
 		outfile << area.left << " ";
 		outfile << area.right << " ";
 		outfile << area.top << " ";
-		outfile << area.bottom << " ";
+		outfile << area.bottom << endl;
+	}
+	outfile << this->glass.size() << endl;
+	for (int i = 0; i < this->glass.size(); i++)
+	{
+		outfile << this->glass[i].getArea() << " ";
+		outfile << this->glass[i].getAreaA() << " ";
+		outfile << this->glass[i].getAreaB() << endl;
 	}
 }
 
@@ -392,6 +465,10 @@ bool Map::passable(int x, int y)
 			for (int j = 0; j < this->doors.size(); j++)
 				if (this->doors[j].getArea() == i)
 					if (!this->doors[j].isOpen())
+						return false;
+			for (int j = 0; j < this->glass.size(); j++)
+				if (this->glass[j].getArea() == i)
+					if (!this->glass[j].isBroken())
 						return false;
 			if (x >= this->areas[i].left)
 				if (x <= this->areas[i].right)
@@ -457,6 +534,14 @@ Step Map::step(int mx, int my, int nx, int ny)
 			if (this->doors[j].getArea() == i && !this->doors[j].isOpen())
 				break;
 		if (j < this->doors.size())
+			continue;
+		for (j = 0; j < this->glass.size(); j++)
+		{
+			this->glass[j].bump(this->pos_a, this->getPossibleAreas(mx + nx, my + ny, this->areas.size()), nx, ny, true);
+			if (this->glass[j].getArea() == i && !this->glass[j].isBroken())
+				break;
+		}
+		if (j < this->glass.size())
 			continue;
 		step.d = 'e';
 		if (mx == this->areas[i].left + 1 && nx <= 0)
@@ -527,3 +612,29 @@ bool Map::bumpAll(int x, int y)
 	return false;
 }
 
+bool Map::bumpGlass(int xa, int ya, int xb, int yb)
+{
+	for (int i = 0; i < this->glass.size(); i++)
+		if (this->glass[i].bump(this->pos_a, this->getPossibleAreas(xb, yb, this->areas.size()), xb - xa, yb - ya, false))
+			return true;
+	return false;
+}
+
+vector<bool> Map::getPossibleAreas(int x, int y, int n)
+{
+	vector<bool> r;
+	for (int i = 0; i < n; i++)
+	{
+		bool b = true;
+		if (x < this->areas[i].left)
+			b = false;
+		if (x > this->areas[i].right)
+			b = false;
+		if (y < this->areas[i].top)
+			b = false;
+		if (y > this->areas[i].bottom)
+			b = false;
+		r.push_back(b);
+	}
+	return r;
+}
