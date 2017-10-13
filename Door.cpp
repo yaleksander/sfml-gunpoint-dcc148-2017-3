@@ -1,10 +1,13 @@
 #include "Door.h"
 
-Door::Door(int n, Area area)
+Door::Door(int n, Area area, int l, int r, bool b)
 {
 	this->area = n;
 	this->open = false;
 	this->area_closed = area;
+	this->xa = l;
+	this->xb = r;
+	this->open = b;
 }
 
 int Door::getArea(void)
@@ -42,8 +45,31 @@ bool Door::isOpen(void)
 	return this->open;
 }
 
+void Door::setOpenTo(char c)
+{
+	if (c == 'l')
+		this->left = true;
+	else if (c == 'r')
+		this->left = false;
+}
+
 void Door::toggle(void)
 {
 	this->open = !this->open;
+}
+
+int Door::getLeft(void)
+{
+	return this->xa;
+}
+
+int Door::getRight(void)
+{
+	return this->xb;
+}
+
+int Door::getY(void)
+{
+	return this->area_closed.bottom;
 }
 

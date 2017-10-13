@@ -113,11 +113,14 @@ Area findArea(sf::Image img, int x, int y, char direction)
 // Metodo construtor. Encontra todas as areas e guarda as informacoes relevantes do mapa num arquivo, caso esse arquivo nao exista
 Map::Map(string map_name)
 {
+	// O objetivo inicialmente nao pode estar completo
+	this->goal_achieved = false;
+
 	// Procura o arquivo ja salvo apenas com informacoes relevantes sobre as areas
 	ifstream infile((map_name + ".md").c_str());
 	if (infile.is_open())
 	{
-		int area_n, door_n, glass_n, j;
+		int area_n, door_n, glass_n, patrol_n, guards_n, lights_n, j;
 		infile >> area_n;
 		for (int i = 0; i < area_n; i++)
 		{
@@ -146,13 +149,17 @@ Map::Map(string map_name)
 		infile >> door_n;
 		for (int i = 0; i < door_n; i++)
 		{
+			int l, r, b;
 			Area area;
 			infile >> j;
 			infile >> area.left;
 			infile >> area.right;
 			infile >> area.top;
 			infile >> area.bottom;
-			Door door(j, area);
+			infile >> b;
+			infile >> l;
+			infile >> r;
+			Door door(j, area, l, r, b);
 			this->doors.push_back(door);
 		}
 		infile >> glass_n;
@@ -165,6 +172,45 @@ Map::Map(string map_name)
 			Glass glass(n, a, b);
 			this->glass.push_back(glass);
 		}
+		infile >> patrol_n;
+		for (int i = 0; i < patrol_n; i++)
+		{
+			Area area;
+			infile >> area.left;
+			infile >> area.right;
+			infile >> area.top;
+			infile >> area.bottom;
+			this->patrol.push_back(area);
+		}
+		infile >> guards_n;
+		for (int i = 0; i < guards_n; i++)
+		{
+			int a, b, c, d, e;
+			infile >> a;
+			infile >> b;
+			infile >> c;
+			infile >> d;
+			infile >> e;
+			Guard guard(a, b, c, d, &this->patrol[e]);
+			for (j = 0; j < door_n; j++)
+				guard.addDoor(j, this->doors[j].getLeft(), this->doors[j].getY());
+			this->guards.push_back(guard);
+		}
+		infile >> lights_n;
+		for (int i = 0; i < lights_n; i++)
+		{
+			bool b;
+			Area area;
+			infile >> area.left;
+			infile >> area.right;
+			infile >> area.top;
+			infile >> area.bottom;
+			infile >> b;
+			Light light(area, b);
+			this->lights.push_back(light);
+		}
+		infile >> this->goal_pos_x;
+		infile >> this->goal_pos_y;
 		return;
 	}
 
@@ -174,8 +220,10 @@ Map::Map(string map_name)
 	sf::Vector2u size = img.getSize();
 	int w = size.x - 1;
 	int h = size.y - 1;
-	this->starting_pos_x = 0;
-	this->starting_pos_y = 0;
+	this->goal_pos_x = -1;
+	this->goal_pos_y = -1;
+	this->starting_pos_x = -1;
+	this->starting_pos_y = -1;
 	for (int i = 0; i < w; i++)
 	{
 		for (int j = 0; j < h; j++)
@@ -187,12 +235,110 @@ Map::Map(string map_name)
 				img.setPixel(i, j, sf::Color::White);
 				this->starting_pos_x = i;
 				this->starting_pos_y = j;
-				break;
+				if (this->goal_pos_x >= 0)
+					break;
+			}
+			// Encontra a posicao do objetivo
+			else if (img.getPixel(i, j) == sf::Color::Yellow)
+			{
+				img.setPixel(i, j, sf::Color::White);
+				this->goal_pos_x = i;
+				this->goal_pos_y = j;
+				if (this->starting_pos_x >= 0)
+					break;
 			}
 		}
 		if (this->starting_pos_x > 0)
 			break;
 	}
+
+	// Encontra areas patrulhadas por guardas (e seus guardas)
+	for (int i = 0; i < w; i++)
+	{
+		bool a, b, c, d, e, f;
+		for (int j = 0; j < h; j++)
+		{
+			a = (img.getPixel(i,     j    ) == sf::Color::Red);
+			b = (img.getPixel(i + 1, j    ) == sf::Color::Black);
+			c = (img.getPixel(i,     j + 1) == sf::Color::Black);
+			d = (img.getPixel(i + 1, j + 1) == sf::Color::Black);
+			e = (img.getPixel(i,     j    ) == sf::Color::White);
+			f = (img.getPixel(i,     j + 1) == sf::Color::Red);
+
+			if (a && b && c && d)
+			{
+				img.setPixel(i, j, sf::Color::Black);
+				Area area;
+				int k = 0;
+				while (img.getPixel(i + k, j) != sf::Color::Blue)
+					k++;
+				img.setPixel(i + k, j, sf::Color::Black);
+				area.left = i;
+				area.right = i + k;
+				k = 0;
+				while (img.getPixel(i, j - k) != sf::Color::Blue)
+					k++;
+				img.setPixel(i, j - k, sf::Color::Black);
+				area.top = j - k;
+				area.bottom = j - 2;
+				this->patrol.push_back(area);
+			}
+			else if (e && f)
+			{
+				int k;
+				for (k = 0; k < this->patrol.size(); k++)
+				{
+					if (i < this->patrol[k].left)
+						continue;
+					if (i > this->patrol[k].right)
+						continue;
+					if (j + 1 != this->patrol[k].bottom)
+						continue;
+					break;
+				}
+				if (img.getPixel(i - 1, j + 1) == sf::Color::Blue)
+					a = true;
+				else if (img.getPixel(i + 1, j + 1) == sf::Color::Blue)
+					a = false;
+				if (a && img.getPixel(i - 2, j + 1) == sf::Color::Blue)
+					b = true;
+				else if (!a && img.getPixel(i + 2, j + 1) == sf::Color::Blue)
+					b = true;
+				else
+					b = false;
+				Guard guard(i, j, b, a, &this->patrol[k]);
+				this->guards.push_back(guard);
+				for (k = 0; k < 5; k++)
+					img.setPixel(i - 2 + k, j + 1, sf::Color::White);
+			}
+		}
+	}
+
+	// Encontra areas iluminadas (a luz pode ser desligada nessas areas)
+	for (int i = 0; i < w; i++)
+	{
+		for (int j = 0; j < h; j++)
+		{
+			if (img.getPixel(i, j) == sf::Color::Magenta)
+			{
+				Area area;
+				area.left = i;
+				area.top = j;
+				int k = 0;
+				while (img.getPixel(i + k, j) != sf::Color::Cyan)
+					k++;
+				area.right = i + k;
+				k = 0;
+				while (img.getPixel(i, j + k) != sf::Color::Cyan)
+					k++;
+				area.bottom = j + k;
+				Light light(area, true);
+				this->lights.push_back(light);
+			}
+		}
+	}
+
+	// Encontra todas as areas do mapa
 	for (int i = 0; i < w; i++)
 	{
 		bool ab, bb, cb, db, aw, bw, cw, dw;
@@ -267,9 +413,12 @@ Map::Map(string map_name)
 					k++;
 				Area a1 = findArea(img, i - k, j + 1, 'd');
 				Area a2 = findArea(img, i + 1, j + 1, 'd');
+				k = a1.right;
 				a1.right = a2.right;
 				a1.top = j;
 				this->areas.push_back(a1);
+				a2.right = a2.left + 1;
+				a2.left = k - 1;
 				k = 0;
 				while (img.getPixel(i - k, j) == sf::Color::Black)
 					k++;
@@ -278,8 +427,10 @@ Map::Map(string map_name)
 				while (img.getPixel(i + k, j) == sf::Color::Black)
 					k++;
 				a1.right = i + k;
-				Door door(this->areas.size() - 1, a1);
+				Door door(this->areas.size() - 1, a1, a2.left, a2.right, false);
 				this->doors.push_back(door);
+				for (k = 0; k < this->guards.size(); k++)
+					this->guards[k].addDoor(this->doors.size() - 1, a2.left, a2.bottom);
 			}
 		}
 	}
@@ -409,7 +560,10 @@ Map::Map(string map_name)
 		outfile << area.left << " ";
 		outfile << area.right << " ";
 		outfile << area.top << " ";
-		outfile << area.bottom << endl;
+		outfile << area.bottom << " ";
+		outfile << false << " ";
+		outfile << this->doors[i].getLeft() << " ";
+		outfile << this->doors[i].getRight() << endl;
 	}
 	outfile << this->glass.size() << endl;
 	for (int i = 0; i < this->glass.size(); i++)
@@ -418,6 +572,38 @@ Map::Map(string map_name)
 		outfile << this->glass[i].getAreaA() << " ";
 		outfile << this->glass[i].getAreaB() << endl;
 	}
+	outfile << this->patrol.size() << endl;
+	for (int i = 0; i < this->patrol.size(); i++)
+	{
+		outfile << this->patrol[i].left << " ";
+		outfile << this->patrol[i].right << " ";
+		outfile << this->patrol[i].top << " ";
+		outfile << this->patrol[i].bottom << endl;
+	}
+	outfile << this->guards.size() << endl;
+	for (int i = 0; i < this->guards.size(); i++)
+	{
+		int j;
+		outfile << this->guards[i].getPosX() << " ";
+		outfile << this->guards[i].getPosY() << " ";
+		outfile << this->guards[i].isWalking() << " ";
+		outfile << this->guards[i].getFacingDirection() << " ";
+		for (j = 0; j < this->patrol.size(); j++)
+			if (this->guards[i].getAreaPtr() == &this->patrol[j])
+				break;
+		outfile << j << endl;
+	}
+	outfile << this->lights.size() << endl;
+	for (int i = 0; i < this->lights.size(); i++)
+	{
+		outfile << this->lights[i].getArea().left << " ";
+		outfile << this->lights[i].getArea().right << " ";
+		outfile << this->lights[i].getArea().top << " ";
+		outfile << this->lights[i].getArea().bottom << " ";
+		outfile << this->lights[i].isOn() << endl;
+	}
+	outfile << this->goal_pos_x << " ";
+	outfile << this->goal_pos_y << endl;
 }
 
 Area Map::getArea(int n)
@@ -456,7 +642,7 @@ int Map::getStartingPosY(void)
 	return this->starting_pos_y;
 }
 
-bool Map::passable(int x, int y)
+bool Map::passable(int x, int y, bool ignore_glass)
 {
 	for (int i = 0; i < this->areas.size(); i++)
 	{
@@ -466,10 +652,11 @@ bool Map::passable(int x, int y)
 				if (this->doors[j].getArea() == i)
 					if (!this->doors[j].isOpen())
 						return false;
-			for (int j = 0; j < this->glass.size(); j++)
-				if (this->glass[j].getArea() == i)
-					if (!this->glass[j].isBroken())
-						return false;
+			if (!ignore_glass)
+				for (int j = 0; j < this->glass.size(); j++)
+					if (this->glass[j].getArea() == i)
+						if (!this->glass[j].isBroken())
+							return false;
 			if (x >= this->areas[i].left)
 				if (x <= this->areas[i].right)
 					if (y >= this->areas[i].top)
@@ -497,12 +684,6 @@ void Map::updatePosA(int x, int y)
 			}
 			if (b)
 				break;
-/*
-			{
-				i = 0;
-				continue;
-			}
-*/
 		}
 	}
 	for (int i = 0; i < this->areas.size(); i++)
@@ -513,7 +694,7 @@ void Map::updatePosA(int x, int y)
 
 Step Map::step(int mx, int my, int nx, int ny)
 {
-	int tx, ty, ax, ay;
+	int ax, ay;
 	Step step;
 	nx -= mx;
 	ny -= my;
@@ -586,9 +767,9 @@ Step Map::step(int mx, int my, int nx, int ny)
 			}
 			step.x += mx;
 			step.y += my;
-			if (this->passable(step.x + ax, step.y + ay))
+			if (this->passable(step.x + ax, step.y + ay, false))
 				continue;
-			if (this->passable(step.x, step.y))
+			if (this->passable(step.x, step.y, false))
 				return step;
 		}
 		else
@@ -612,10 +793,10 @@ bool Map::bumpAll(int x, int y)
 	return false;
 }
 
-bool Map::bumpGlass(int xa, int ya, int xb, int yb)
+bool Map::bumpGlass(int xa, int ya, int xb, int yb, bool real)
 {
 	for (int i = 0; i < this->glass.size(); i++)
-		if (this->glass[i].bump(this->pos_a, this->getPossibleAreas(xb, yb, this->areas.size()), xb - xa, yb - ya, false))
+		if (this->glass[i].bump(this->pos_a, this->getPossibleAreas(xb, yb, this->areas.size()), xb - xa, yb - ya, real))
 			return true;
 	return false;
 }
@@ -638,3 +819,99 @@ vector<bool> Map::getPossibleAreas(int x, int y, int n)
 	}
 	return r;
 }
+
+bool Map::guardsMove(int x, int y, int speed, bool dead)
+{
+	for (int i = 0; i < guards.size(); i++)
+	{
+		if (!dead)
+		{
+			vector<bool> old_pos_a = this->pos_a;
+			int j, dx, dy, steps = 5;
+			for (j = steps; j > 0; j--)
+			{
+				dx = (x - this->guards[i].getPosX()) / j;
+				dy = (y - this->guards[i].getPosY()) / j;
+				if (this->guards[i].isDistracted() && abs(dy) > abs(dx) + 30)
+					break;
+				if (this->guards[i].getFacingDirection() && dx > 0)
+					break;
+				if (!this->guards[i].getFacingDirection() && dx < 0)
+					break;
+				if (this->passable(x - dx, y - dy, true))
+				{
+					if (j == 1 && this->guards[i].isInRange(x, y))
+						this->bumpGlass(x - dx, y - dy, x, y, true);
+					this->updatePosA(x - dx, y - dy);
+				}
+				else
+					break;
+			}
+			this->pos_a = old_pos_a;
+			if (j == 0)
+			{
+				for (; j < this->lights.size(); j++)
+					if (this->lights[i].isInDarkArea(x, y))
+						break;
+				dead = this->guards[i].shoot(x, y, speed, dead, !(j < this->lights.size()));
+			}
+		}
+		vector<int> v;
+		for (int j = 0; j < this->guards[i].getDoorVectorSize(); j++)
+		{
+			if (!this->doors[this->guards[i].getDoor(j)].isOpen())
+			{
+				v.push_back(this->doors[this->guards[i].getDoor(j)].getLeft());
+				v.push_back(this->doors[this->guards[i].getDoor(j)].getRight());
+			}
+		}
+		this->guards[i].move(v);
+	}
+	return dead;
+}
+
+Guard Map::getGuard(int n)
+{
+	return this->guards[n];
+}
+
+int Map::getNumberOfGuards(void)
+{
+	return this->guards.size();
+}
+
+int Map::getGuardX(int n)
+{
+	return this->guards[n].getPosX();
+}
+
+int Map::getGuardY(int n)
+{
+	return this->guards[n].getPosY();
+}
+
+int Map::guardAnim(int n)
+{
+	return this->guards[n].getAnimFrame();
+}
+
+int Map::getGoalX(void)
+{
+	return this->goal_pos_x;
+}
+
+int Map::getGoalY(void)
+{
+	return this->goal_pos_y;
+}
+
+void Map::finish(void)
+{
+	this->goal_achieved = true;
+}
+
+bool Map::done(void)
+{
+	return this->goal_achieved;
+}
+
